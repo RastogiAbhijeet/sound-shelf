@@ -18,9 +18,11 @@ This is an early, source-built app. It uses ad hoc signing and is not a notarize
 
 Requires **macOS 13+** and **Swift 5.9+** through Apple’s developer tools. Browser integration also needs **Python 3.8+** and the unpacked companion extension. These are declared/code-level requirements, not a claim that every combination has been tested; see the [compatibility matrix](docs/compatibility.md).
 
-From a clone of this repository:
+Clone [RastogiAbhijeet/sound-shelf](https://github.com/RastogiAbhijeet/sound-shelf), then build and launch:
 
 ```sh
+git clone https://github.com/RastogiAbhijeet/sound-shelf.git
+cd sound-shelf
 sh scripts/build-app.sh
 open dist/SoundShelf.app
 ```
@@ -31,7 +33,7 @@ Look for the wave ring in the menu bar; there is no Dock icon. Right-click it fo
 
 ## Set it up with your agent
 
-Fork the repository, clone your fork, and open that folder in your coding agent. Give it this prompt:
+Clone the repository using the commands above and open the `sound-shelf` folder in your coding agent. If you plan to contribute, [fork the repository](https://github.com/RastogiAbhijeet/sound-shelf/fork) and clone your fork instead. Give your agent this prompt:
 
 > Set up SoundShelf from this checkout on my Mac. Read AGENTS.md and docs/setup.md first. Check my OS and toolchain, build the app, and help me connect my chosen browser/profile. Ask me for the extension ID after I load the unpacked extension. Verify the connection and a media fixture, explain any manual steps, and report what was actually tested. Do not change my live call or microphone state to test setup.
 

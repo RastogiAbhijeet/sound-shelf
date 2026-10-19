@@ -20,14 +20,18 @@ If developer tools are missing, run `xcode-select --install` and finish Apple’
 
 ## Clone and build
 
-On the repository’s GitHub page, optionally choose **Fork**, then copy the clone URL from **Code**. Replace the example URL below with upstream or your fork:
+Clone [RastogiAbhijeet/sound-shelf](https://github.com/RastogiAbhijeet/sound-shelf) over HTTPS, then build and launch:
 
 ```sh
-git clone https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git
-cd YOUR_REPOSITORY
+git clone https://github.com/RastogiAbhijeet/sound-shelf.git
+cd sound-shelf
 sh scripts/build-app.sh
 open dist/SoundShelf.app
 ```
+
+If you already have GitHub SSH access configured, you can use `git clone git@github.com:RastogiAbhijeet/sound-shelf.git` instead of the HTTPS clone command. Then run the same `cd`, build, and launch commands above.
+
+To contribute through your own fork, [fork the repository](https://github.com/RastogiAbhijeet/sound-shelf/fork), copy your fork’s clone URL from **Code**, and use that URL in the clone command instead. A fork is optional for installation.
 
 The script creates `dist/SoundShelf.app` for the build machine’s architecture and signs it ad hoc. It does not install anything system-wide. Click the wave ring in the menu bar; there is no Dock icon. You can copy the app to `~/Applications` or `/Applications` using Finder. Quit an older running copy before opening the replacement. No login item or launch agent is installed.
 
