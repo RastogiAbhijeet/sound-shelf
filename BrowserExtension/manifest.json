@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "SoundShelf Companion",
+  "version": "0.4.3",
+  "description": "Sound and microphone controls in the SoundShelf macOS menu bar.",
+  "minimum_chrome_version": "106",
+  "permissions": [
+    "nativeMessaging",
+    "tabs",
+    "scripting",
+    "storage",
+    "webNavigation",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SoundShelf connection"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "microphone.js",
+        "content.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_idle"
+    }
+  ]
+}
