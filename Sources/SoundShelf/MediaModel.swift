@@ -16,6 +16,8 @@ struct MediaSource: Identifiable, Equatable {
     var connection: String? = nil
     var browserSource: BrowserSource? = nil
     var nativeApp: String? = nil
+
+    var supportsVolume: Bool { volume != nil && supportsPlayback }
 }
 
 struct BrowserSource: Codable, Equatable {
@@ -317,6 +319,15 @@ final class MediaModel: ObservableObject {
         busyMicrophoneIDs.subtract(completedMicrophoneIDs)
         if !completedSourceIDs.isEmpty { busySourceIDs.subtract(completedSourceIDs) }
         completions.forEach { $0() }
+    }
+
+    func setVolume(_ source: MediaSource, value: Double, completion: ((Bool) -> Void)? = nil) {
+        guard value.isFinite, source.supportsVolume,
+              let current = sources.first(where: { $0.id == source.id }), current.supportsVolume,
+              current.browserSource?.id == source.browserSource?.id else {
+            completion?(false); return
+        }
+        command(current, action: "volume", value: min(1, max(0, value)), completion: completion)
     }
 
     func command(_ source: MediaSource, action: String, value: Double? = nil, tabOnly: Bool = false, completion: ((Bool) -> Void)? = nil) {

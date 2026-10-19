@@ -93,7 +93,7 @@ struct ShelfView: View {
                 }.padding(8)
             }
         }
-        .frame(width: 520)
+        .frame(width: 680)
         .foregroundStyle(palette.text)
         .background(palette.background)
         // NSPopover already clips and outlines its window. A second rounded
@@ -167,7 +167,7 @@ struct ShelfView: View {
 }
 
 struct PlayerRow: View {
-    static let height: CGFloat = 60
+    static let height: CGFloat = 82
     let source: MediaSource
     @ObservedObject var model: MediaModel
     var masterMuted = false
@@ -180,43 +180,108 @@ struct PlayerRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Button { model.command(source, action: "focus") } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(source.displayName ?? source.title).font(.system(size: 12, weight: source.playing ? .semibold : .medium)).lineLimit(1)
-                    Text(source.title == source.displayName ? source.subtitle : source.title).font(.system(size: 10)).foregroundStyle(palette.secondary).lineLimit(1)
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                Button { model.command(source, action: "focus") } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(source.displayName ?? source.title).font(.system(size: 12, weight: source.playing ? .semibold : .medium)).lineLimit(1)
+                        Text(source.title == source.displayName ? source.subtitle : source.title).font(.system(size: 10)).foregroundStyle(palette.secondary).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .foregroundStyle(palette.text)
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .foregroundStyle(palette.text)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .help(source.nativeApp == nil ? "Open this browser tab" : "Open this app")
+                .accessibilityLabel("Open \(source.title) in \(source.subtitle)")
+                if source.supportsPlayback {
+                Button { model.command(source, action: source.playing ? "pause" : "play") } label: {
+                    Image(systemName: source.playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(source.playing ? palette.green : palette.text)
+                        .frame(width: 27, height: 30)
+                        .background(source.playing ? palette.greenBackground : palette.buttonBackground, in: Circle())
+                        .contentShape(Circle())
+                }.buttonStyle(.plain).help(source.playing ? "Pause" : "Play")
+                    .disabled(model.busySourceIDs.contains(source.id))
+                    .accessibilityLabel("\(source.playing ? "Pause" : "Play") \(source.title)")
+                }
+                Button { model.command(source, action: "mute", value: source.muted == true ? 0 : 1) } label: {
+                    Image(systemName: source.muted == true ? "speaker.slash.fill" : "speaker.wave.2")
+                        .font(.system(size: 13)).foregroundStyle(soundColor)
+                        .frame(width: 25, height: 30).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(masterMuted || source.muted == nil || model.busySourceIDs.contains(source.id))
+                    .help(source.muted == true ? "Restore sound" : "Silence")
+                    .accessibilityLabel("\(source.muted == true ? "Restore sound" : "Silence") \(source.title)")
             }
-            .buttonStyle(.plain)
-            .help(source.nativeApp == nil ? "Open this browser tab" : "Open this app")
-            .accessibilityLabel("Open \(source.title) in \(source.subtitle)")
-            if source.supportsPlayback {
-            Button { model.command(source, action: source.playing ? "pause" : "play") } label: {
-                Image(systemName: source.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(source.playing ? palette.green : palette.text)
-                    .frame(width: 27, height: 30)
-                    .background(source.playing ? palette.greenBackground : palette.buttonBackground, in: Circle())
-                    .contentShape(Circle())
-            }.buttonStyle(.plain).help(source.playing ? "Pause" : "Play")
-                .disabled(model.busySourceIDs.contains(source.id))
-                .accessibilityLabel("\(source.playing ? "Pause" : "Play") \(source.title)")
+            .frame(height: 32)
+            if source.supportsVolume {
+                SourceVolumeSlider(source: source, model: model, masterMuted: masterMuted)
+                    .id(source.browserSource?.id ?? source.id)
+            } else {
+                Text("Volume unavailable · mute supported")
+                    .font(.system(size: 10)).foregroundStyle(palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: 18)
             }
-            Button { model.command(source, action: "mute", value: source.muted == true ? 0 : 1) } label: {
-                Image(systemName: source.muted == true ? "speaker.slash.fill" : "speaker.wave.2")
-                    .font(.system(size: 13)).foregroundStyle(soundColor)
-                    .frame(width: 25, height: 30).contentShape(Rectangle())
-            }.buttonStyle(.plain).disabled(masterMuted || source.muted == nil || model.busySourceIDs.contains(source.id))
-                .help(source.muted == true ? "Restore sound" : "Silence")
-                .accessibilityLabel("\(source.muted == true ? "Restore sound" : "Silence") \(source.title)")
         }
-        .frame(height: 32)
         .padding(.horizontal, 12)
         .padding(.vertical, 14)
         .background(source.playing ? palette.activeBackground : Color.clear)
+    }
+}
+
+// Keep the property-wrapper spelling distinct from newer SDK State macros.
+private typealias SliderState<Value> = State<Value>
+
+private struct SourceVolumeSlider: View {
+    let source: MediaSource
+    @ObservedObject var model: MediaModel
+    let masterMuted: Bool
+    @SliderState private var draft: Double?
+    @SliderState private var editing = false
+    @SliderState private var submitting = false
+    @Environment(\.colorScheme) private var colorScheme
+    private var palette: ShelfPalette { ShelfPalette(dark: colorScheme == .dark) }
+    private var value: Double { draft ?? source.volume ?? 0 }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Slider(value: Binding(get: { value }, set: { draft = $0 }), in: 0...1,
+                   onEditingChanged: { active in
+                       editing = active
+                       if !active { commit() }
+                   })
+                .controlSize(.mini)
+                .tint(palette.blue)
+                .accessibilityLabel("Volume for \(source.displayName ?? source.title)")
+                .accessibilityValue("\(Int((value * 100).rounded())) percent")
+                .help("Adjust this app or tab's selected media player. Release to apply; mute is separate.")
+                .disabled(masterMuted || submitting || model.busySourceIDs.contains(source.id))
+            Text("\(Int((value * 100).rounded()))%")
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundStyle(palette.secondary)
+                .frame(width: 32, alignment: .trailing)
+        }
+        .frame(height: 18)
+        .task(id: draft) {
+            // Keyboard and accessibility adjustments do not always start a drag.
+            guard draft != nil else { return }
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+            if !editing { commit() }
+        }
+        .onChange(of: masterMuted) { muted in
+            if muted && !submitting { draft = nil }
+        }
+    }
+
+    private func commit() {
+        guard let draft, !submitting, !masterMuted else { return }
+        submitting = true
+        model.setVolume(source, value: draft) { _ in
+            self.draft = nil
+            submitting = false
+        }
     }
 }
 

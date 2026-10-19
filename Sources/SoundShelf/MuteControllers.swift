@@ -7,12 +7,17 @@ final class ShelfMuteController: ObservableObject {
     @Published private(set) var isMuted = false
     @Published private(set) var isBusy = false
     private let model: MediaModel
+    private let setMuted: (MediaSource, Bool, @escaping (Bool) -> Void) -> Void
     private var restore: [String: MediaSource] = [:]
     private var attempted: Set<String> = []
     private var timer: Timer?
 
-    init(model: MediaModel, startTimer: Bool = true) {
+    init(model: MediaModel, startTimer: Bool = true,
+         setMuted: ((MediaSource, Bool, @escaping (Bool) -> Void) -> Void)? = nil) {
         self.model = model
+        self.setMuted = setMuted ?? { source, muted, completion in
+            model.command(source, action: "mute", value: muted ? 1 : 0, tabOnly: true, completion: completion)
+        }
         if startTimer {
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
         }
@@ -42,9 +47,21 @@ final class ShelfMuteController: ObservableObject {
         if !targets.isEmpty { run(targets, muting: true) }
     }
 
+    private func finishRestoration() {
+        let live = Set(model.sources.map(identity))
+        // Hidden native apps may still be muted, including while reconnection is polling.
+        // Release their ownership only after a successful restore acknowledgement.
+        restore = restore.filter { live.contains($0.key) || $0.value.nativeApp != nil }
+        isMuted = !restore.isEmpty
+        if !isMuted { attempted = [] }
+        if restore.values.contains(where: { $0.nativeApp != nil && (!model.nativeEnabled || !live.contains(identity($0))) }) {
+            model.error = "Reconnect Spotify & Music and reopen the player if needed, then restore SoundShelf audio before restarting."
+        }
+    }
+
     private func run(_ targets: [MediaSource], muting: Bool) {
         guard !targets.isEmpty else {
-            if !muting { restore = [:]; attempted = []; isMuted = false }
+            if !muting { finishRestoration() }
             return
         }
         isBusy = true
@@ -56,16 +73,13 @@ final class ShelfMuteController: ObservableObject {
                 // Retain on failure too: a timeout can occur after mute reached the player.
                 restore[key] = source
             }
-            model.command(source, action: "mute", value: muting ? 1 : 0, tabOnly: true) { [weak self] success in
+            setMuted(source, muting) { [weak self] success in
                 guard let self else { return }
                 if !muting && success { self.restore.removeValue(forKey: key) }
                 remaining -= 1
                 if remaining == 0 {
                     if !muting {
-                        let live = Set(self.model.sources.map(self.identity))
-                        self.restore = self.restore.filter { live.contains($0.key) }
-                        self.isMuted = !self.restore.isEmpty
-                        if !self.isMuted { self.attempted = [] }
+                        self.finishRestoration()
                     }
                     self.isBusy = false
                 }
@@ -89,7 +103,9 @@ protocol MacMuteHardware {
 }
 
 struct CoreAudioMuteHardware: MacMuteHardware {
-    private let audio = AudioController()
+    private let audio: AudioController
+
+    init(audio: AudioController = AudioController()) { self.audio = audio }
     private func failure(_ name: String) -> NSError {
         NSError(domain: "SoundShelf", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not silence or restore \(name)."])
     }

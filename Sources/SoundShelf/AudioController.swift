@@ -12,6 +12,12 @@ final class AudioController: ObservableObject {
     @Published var devices: [OutputDevice] = []
     @Published var selected: AudioDeviceID = 0
     @Published var error: String?
+    private let enumerateOutputs: (() throws -> [OutputDevice])?
+
+    init(enumerateOutputs: (() throws -> [OutputDevice])? = nil) {
+        self.enumerateOutputs = enumerateOutputs
+    }
+
     private let system = AudioObjectID(kAudioObjectSystemObject)
 
     func address(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal, element: UInt32 = kAudioObjectPropertyElementMain) -> AudioObjectPropertyAddress {
@@ -48,19 +54,28 @@ final class AudioController: ObservableObject {
     }
 
     func refresh() {
+        do {
+            devices = try enumerateOutputs?() ?? readOutputs()
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func readOutputs() throws -> [OutputDevice] {
         var property = address(kAudioHardwarePropertyDevices)
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(system, &property, 0, nil, &size) == noErr else {
-            error = "Could not read audio outputs."; return
+            throw NSError(domain: "SoundShelf", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not read audio outputs."])
         }
         var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
-        guard !ids.isEmpty else { devices = []; return }
+        guard !ids.isEmpty else { return [] }
         let status = ids.withUnsafeMutableBytes { bytes in
             AudioObjectGetPropertyData(system, &property, 0, nil, &size, bytes.baseAddress!)
         }
-        guard status == noErr else { error = "Could not read audio outputs (\(status))."; return }
+        guard status == noErr else { throw NSError(domain: "SoundShelf", code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Could not read audio outputs (\(status))."]) }
         _ = read(system, address(kAudioHardwarePropertyDefaultOutputDevice), into: &selected)
-        devices = ids.compactMap { id in
+        return ids.compactMap { id in
             guard channelCount(id) > 0 else { return nil }
             var alive: UInt32 = 0
             guard read(id, address(kAudioDevicePropertyDeviceIsAlive), into: &alive), alive != 0 else { return nil }
@@ -81,17 +96,19 @@ final class AudioController: ObservableObject {
         var property = address(kAudioHardwarePropertyDefaultOutputDevice)
         var id = device.id
         let status = AudioObjectSetPropertyData(system, &property, 0, nil, UInt32(MemoryLayout.size(ofValue: id)), &id)
-        if status != noErr { error = "Could not switch to \(device.name) (\(status))." }
         refresh()
+        if status != noErr { error = "Could not switch to \(device.name) (\(status))." }
     }
 
     func setVolume(_ device: OutputDevice, value: Double) {
+        var writeError: String?
         for element in volumeElements(device.id) {
             var property = address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput, element: element)
             var scalar = Float32(min(1, max(0, value)))
             let status = AudioObjectSetPropertyData(device.id, &property, 0, nil, UInt32(MemoryLayout.size(ofValue: scalar)), &scalar)
-            if status != noErr { error = "Could not change \(device.name) volume (\(status))." }
+            if status != noErr { writeError = "Could not change \(device.name) volume (\(status))." }
         }
         refresh()
+        if let writeError { error = writeError }
     }
 }

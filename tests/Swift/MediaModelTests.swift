@@ -111,6 +111,54 @@ final class MediaModelTests {
         expectEqual(state.sources.first { $0.id == primary.id }?.browserSource?.id, "main")
     }
 
+    func testVolumeTargetsOnlyRequestedProfileAndUsesAcknowledgedState() throws {
+        try writeState([player(), player("other-tab", tab: 11)])
+        try writeState([player()], connection: "second-profile")
+        let state = model()
+        let row = try require(state.sources.first { $0.id == "connection:tab:10" })
+        var completed: Bool?
+        state.setVolume(row, value: 0.27) { completed = $0 }
+        let command = try require(commands().first)
+        expectEqual(try commands().count, 1)
+        expectEqual(command["action"] as? String, "volume")
+        expectEqual(command["value"] as? Double, 0.27)
+        expectEqual(command["tabId"] as? Int, 10)
+        expectEqual(command["id"] as? String, row.browserSource?.id)
+        expectEqual(state.busySourceIDs, [row.id])
+        expectEqual(row.volume, 1)
+        let fresh = BrowserSource(id: "tab:10:doc", tabId: 10, frameId: 0, title: "Same title",
+            site: "youtube.com", playing: false, ready: false, volume: 0.27, muted: false)
+        let source = try JSONSerialization.jsonObject(with: JSONEncoder().encode(fresh))
+        let request = try require(command["requestId"] as? String)
+        try write(["ok": true, "source": source, "revision": 2], name: "result-\(request).json")
+        state.refreshBridge()
+        expectEqual(completed, true)
+        expectEqual(state.sources.first { $0.id == row.id }?.volume, 0.27)
+        expectTrue(state.sources.filter { $0.id != row.id }.allSatisfy { $0.volume == 1 })
+        expectTrue(state.busySourceIDs.isEmpty)
+    }
+
+    func testVolumeRejectsCallsInvalidValuesAndReplacementPlayers() throws {
+        let call = BrowserSource(id: "call", tabId: 11, frameId: 0, title: "Meet", site: "meet.google.com",
+            playing: true, ready: false, volume: 1, muted: false, supportsPlayback: false)
+        try writeState([player(), call])
+        let state = model()
+        let row = try require(state.sources.first { $0.browserSource?.tabId == 10 })
+        let callRow = try require(state.sources.first { $0.browserSource?.tabId == 11 })
+        expectFalse(callRow.supportsVolume)
+        state.setVolume(callRow, value: 0.5)
+        state.setVolume(row, value: .nan)
+        state.setVolume(row, value: .infinity)
+        expectEqual(try commands().count, 0)
+        try writeState([player("replacement"), call], revision: 2)
+        state.refreshBridge()
+        state.setVolume(row, value: 0.5)
+        expectEqual(try commands().count, 0)
+        let replacement = try require(state.sources.first { $0.browserSource?.tabId == 10 })
+        state.setVolume(replacement, value: 2)
+        expectEqual(try commands().first?["value"] as? Double, 1)
+    }
+
     func testRapidClicksAreBlockedUntilFreshAcknowledgement() throws {
         try writeState([player()])
         let state = model()
@@ -219,6 +267,44 @@ final class MediaModelTests {
         try write(["ok": true], name: "result-\(retryID).json")
         state.refreshBridge()
         expectFalse(master.isMuted || master.isBusy)
+    }
+
+    func testDisabledNativeIntegrationPreservesOwnedMuteAndBlocksRestart() throws {
+        let state = model()
+        let oldPreference = UserDefaults.standard.object(forKey: "nativePlayers")
+        defer {
+            if let oldPreference { UserDefaults.standard.set(oldPreference, forKey: "nativePlayers") }
+            else { UserDefaults.standard.removeObject(forKey: "nativePlayers") }
+        }
+        let source = MediaSource(id: "native:spotify", title: "Spotify", subtitle: "", playing: true,
+                                 ready: false, volume: 0.7, muted: false, nativeApp: "com.spotify.client")
+        state.sources = [source]
+        var volume = 0.7
+        var pendingMute: ((Bool) -> Void)?
+        let master = ShelfMuteController(model: state, startTimer: false, setMuted: { _, muted, completion in
+            if muted { volume = 0; pendingMute = completion }
+            else { volume = 0.7; completion(true) }
+        })
+        master.toggle()
+        expectTrue(master.isBusy)
+        // Disable while the mute acknowledgement is still pending.
+        state.nativeEnabled = false
+        expectTrue(state.sources.isEmpty)
+        pendingMute?(true)
+        master.toggle()
+        expectTrue(master.isMuted && !master.isBusy)
+        expectEqual(volume, 0)
+        expectTrue(state.error?.contains("Reconnect Spotify & Music") == true)
+        let restart = AppRestartController(launch: { _ in preconditionFailure("Must not launch with unrestored audio") },
+                                           terminate: { preconditionFailure("Must not terminate with unrestored audio") })
+        restart.restart(model: state, shelfMute: master, macMute: MacMuteController(startTimer: false))
+        expectFalse(restart.isRestarting)
+        expectTrue(master.isMuted)
+        // Simulate the native row returning without launching or querying a real player.
+        state.sources = [source]
+        master.toggle()
+        expectFalse(master.isMuted || master.isBusy)
+        expectEqual(volume, 0.7)
     }
 
     func testShelfMuteDoesNotUnmuteANavigatedTab() throws {
@@ -368,6 +454,8 @@ final class MediaModelTests {
 struct RegressionRunner {
     static func main() throws {
         let tests: [(String, (MediaModelTests) throws -> Void)] = [
+            ("volume is isolated by tab and profile and waits for acknowledged state", { try $0.testVolumeTargetsOnlyRequestedProfileAndUsesAcknowledgedState() }),
+            ("volume rejects calls, invalid values, and replacement players", { try $0.testVolumeRejectsCallsInvalidValuesAndReplacementPlayers() }),
             ("new sites get friendly names and tab titles update without changing identity", { try $0.testBrowserNamesAreFriendlyForNewSitesAndTrackCurrentTabTitles() }),
             ("incompatible optional mic payload preserves sound", { try $0.testMalformedOptionalMicrophonesCannotBreakSoundDiscovery() }),
             ("mic-only rows, profiles, pending commands and acknowledgements", { try $0.testMicrophonesAreIndependentAndProfilesStaySeparate() }),
@@ -385,6 +473,7 @@ struct RegressionRunner {
             ("focus results cannot change playback", { try $0.testFocusResultCannotChangePlaybackState() }),
             ("failed commands release controls and report errors", { try $0.testFailedCommandReleasesControlsAndShowsError() }),
             ("Shelf master mute ownership, acknowledgements, and retry", { try $0.testShelfMuteRestoresOnlyOwnedMutesAndWaitsForAcknowledgement() }),
+            ("disabled native integration retains owned mute and blocks restart", { try $0.testDisabledNativeIntegrationPreservesOwnedMuteAndBlocksRestart() }),
             ("Shelf mute cannot unmute a replacement page", { try $0.testShelfMuteDoesNotUnmuteANavigatedTab() })
         ]
         for (name, run) in tests {
@@ -397,6 +486,6 @@ struct RegressionRunner {
         runMuteTests()
         let restartTests = try runAppRestartTests()
         let microphoneTests = try runMicrophoneMuteTests()
-        print("\(tests.count + 5 + restartTests + microphoneTests) native regression tests passed.")
+        print("\(tests.count + 6 + restartTests + microphoneTests) native regression tests passed.")
     }
 }

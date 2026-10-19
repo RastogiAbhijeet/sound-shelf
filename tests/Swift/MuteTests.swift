@@ -17,6 +17,31 @@ private final class FakeMuteHardware: MacMuteHardware {
 }
 
 func runMuteTests() {
+    do {
+        var failing = true
+        let audio = AudioController(enumerateOutputs: {
+            if failing { throw NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Enumeration failed"]) }
+            return []
+        })
+        let hardware = CoreAudioMuteHardware(audio: audio)
+        do {
+            _ = try hardware.controls(strict: false)
+            preconditionFailure("Expected enumeration failure")
+        } catch { precondition(audio.error == "Enumeration failed") }
+        failing = false
+        do {
+            let controls = try hardware.controls(strict: false)
+            precondition(controls.isEmpty)
+            precondition(audio.error == nil)
+        } catch { preconditionFailure("Recovered enumeration must allow restoration: \(error)") }
+        failing = true
+        audio.refresh()
+        precondition(audio.error != nil)
+        failing = false
+        audio.refresh()
+        precondition(audio.error == nil && audio.devices.isEmpty)
+        print("PASS: Core Audio enumeration recovers after transient failures, including empty output lists")
+    }
     func property(_ element: UInt32, uid: String = "built-in", mute: Bool = false) -> MacMuteProperty {
         MacMuteProperty(device: 1, uid: uid, selector: mute ? kAudioDevicePropertyMute : kAudioDevicePropertyVolumeScalar, element: element, name: "Test output")
     }
