@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoundShelf — Media controls in your Mac’s menu bar</title>
+<meta name="description" content="A free, open-source macOS menu bar app for browser media, Spotify, and Music. Control playback, volume, and supported microphone sources in one place.">
+<link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+<link rel="canonical" href="https://rastogiabhijeet.github.io/sound-shelf/">
+<meta property="og:title" content="SoundShelf — Media controls in your Mac’s menu bar">
+<meta property="og:description" content="Control browser media, Spotify, and Music from a native macOS menu bar app. Free and open source.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="assets/site.css"><script src="assets/site.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M8 10v4m4-7v10m4-8v6"/></svg>SoundShelf</a><nav aria-label="Main navigation"><a href="#setup">Setup</a><a href="https://github.com/RastogiAbhijeet/sound-shelf">GitHub ↗</a></nav></header>
+<main>
+<section class="intro">
+<p class="release">Free and open source · macOS</p>
+<h1>Your media controls,<br>in the menu bar.</h1>
+<p class="lead">Play, pause, adjust volume, and find the tab behind the sound. SoundShelf brings browser media, Spotify, and Music into one native macOS panel.</p>
+<div class="actions"><a class="button" href="#setup">Get started</a><a href="https://github.com/RastogiAbhijeet/sound-shelf">View source on GitHub ↗</a></div>
+<p class="small">Early source release. Build locally; no notarized installer yet.</p>
+<figure class="panel-preview"><img src="assets/panel.png" width="680" height="304" alt="SoundShelf’s native panel: Sound and Mic columns, playback buttons, volume sliders, and separate master controls."><figcaption>Current native panel, rendered from the app’s UI code with sample media. The Mic column is empty because no call is connected.</figcaption></figure>
+</section>
+<section class="features" aria-label="Features">
+<article><h2>Keep paused players handy</h2><p>Qualifying loaded and paused players stay visible. Click a source’s name to open its exact tab or app.</p></article>
+<article><h2>Control each source</h2><p>Play/pause, mute, and adjust volume for supported media. Browser tabs and profiles remain separate.</p></article>
+<article><h2>Keep sound and mic separate</h2><p>Sound controls don’t change your microphone. Unsupported or unknown mic states stay disabled.</p></article>
+</section>
+<section class="companion" aria-labelledby="companion-title"><div><h2 id="companion-title">A small browser companion</h2><p>The extension connects your browser to SoundShelf. Its popup shows connection status and your extension ID, with a Reconnect button.</p><p><strong>The playback controls live in your Mac’s menu bar.</strong> The browser popup is just for the connection.</p><a href="https://github.com/RastogiAbhijeet/sound-shelf/blob/main/docs/setup.md#connect-a-browser">Browser setup instructions ↗</a></div><figure><iframe src="assets/companion.html" title="SoundShelf Companion popup preview with sample connection status" sandbox></iframe><figcaption>Popup preview with sample status and extension ID.</figcaption></figure></section>
+<section class="details"><h2>What works today</h2><dl><div><dt>Browser media</dt><dd>Chrome is the initial target. Bridge registration also supports Brave, Edge, and Chromium; verify your browser. Safari and Firefox are not supported.</dd></div><div><dt>Native apps</dt><dd>Spotify and Music, through macOS Automation permission. Arbitrary native-app volume and output routing are outside the current scope.</dd></div><div><dt>Microphones</dt><dd>Conditional Google Meet controls for recognized English live-call UI. Discord and native call apps provide discovery only. This is not a universal microphone mute switch.</dd></div><div><dt>Privacy</dt><dd>No account, audio recording, or cloud service. The companion needs HTTP/HTTPS page access for media discovery and supported call controls. Metadata and commands stay in a local bridge.</dd></div></dl><a href="https://github.com/RastogiAbhijeet/sound-shelf/blob/main/docs/compatibility.md">Compatibility and tested configurations ↗</a></section>
+<section id="setup"><h2>Build and run</h2><p>Declared requirements: macOS 13+, Swift 5.9+, and Python 3.8+ for browser integration. Not every OS/browser combination has been tested.</p><div class="code-heading"><span>In Terminal</span><button id="copy-command" hidden>Copy commands</button></div><pre><code id="commands">git clone https://github.com/RastogiAbhijeet/sound-shelf.git
+cd sound-shelf
+sh scripts/build-app.sh
+open dist/SoundShelf.app</code></pre><p id="copy-status" role="status" aria-live="polite"></p><p>Look for SoundShelf’s wave-ring icon in the menu bar. To connect browser tabs, load the unpacked companion and register its extension ID using the setup guide.</p><a class="button" href="https://github.com/RastogiAbhijeet/sound-shelf/blob/main/docs/setup.md">Full setup guide ↗</a><p class="small">Restore session-owned master sound mutes before quitting. Builds use ad hoc signing.</p></section>
+</main>
+<footer><span>SoundShelf · <a href="https://github.com/RastogiAbhijeet/sound-shelf/blob/main/LICENSE">MIT license</a></span><a href="https://github.com/RastogiAbhijeet/sound-shelf/issues">Report an issue ↗</a></footer>
+</body></html>
